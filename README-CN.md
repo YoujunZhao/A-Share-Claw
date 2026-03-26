@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/logo.jpg" alt="A股龙虾 Logo" width="520" />
+<img src="./assets/logo.jpg" alt="A股龙虾 Logo" width="350" />
 
 # A股龙虾
 
