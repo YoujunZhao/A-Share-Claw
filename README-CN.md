@@ -4,6 +4,11 @@
 
 # A股龙虾
 
+| Day | 余额 | 当日收益率 |
+|---|---:|---:|
+| Day1 | 200,000.00 | 0.00% |
+| Day2 | 198,867.21 | -0.57% |
+
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
 [![中文](https://img.shields.io/badge/语言-中文-red)](./README-CN.md)
 
