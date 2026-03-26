@@ -2,11 +2,90 @@
 
 <p>
   <a href="#english"><img alt="English" src="https://img.shields.io/badge/Language-English-blue"></a>
-  <a href="#中文"><img alt="中文" src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E4%B8%AD%E6%96%87-red"></a>
+  <a href="#chinese"><img alt="中文" src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E4%B8%AD%E6%96%87-red"></a>
 </p>
 
 ---
 
+<a id="english"></a>
+## English
+
+### What this is
+A-Share Claw is an OpenClaw-based **A-share paper-trading automation workflow** with:
+- scheduled runs on trading days (09:24 / 10:30 / 14:30)
+- risk controls (single-symbol cap, total exposure cap, stale-order cancellation)
+- daily review generation at 15:10
+
+> For paper trading education only. Not financial advice.
+
+### “One sentence to OpenClaw” auto install
+Send this prompt directly to OpenClaw:
+
+```text
+Please one-click install and configure A-Share Claw on this machine: clone https://github.com/YoujunZhao/A-Share-Claw.git, run installer/install.sh, check whether ~/.openclaw/mx.env contains MX_APIKEY (if missing, ask me to provide), then verify cron has the 4 mx_autotrade jobs and report status.
+```
+
+If you already want it to set env too:
+
+```text
+Please one-click install A-Share Claw, write MX_APIKEY into ~/.openclaw/mx.env, complete installation verification, and report final status. Repo: https://github.com/YoujunZhao/A-Share-Claw.git
+```
+
+### Manual install (fallback)
+```bash
+git clone https://github.com/YoujunZhao/A-Share-Claw.git
+cd A-Share-Claw
+bash installer/install.sh
+```
+
+Set env:
+```bash
+cat > ~/.openclaw/mx.env <<'EOF'
+export MX_APIKEY="your_key"
+export MX_API_URL="https://mkapi2.dfcfs.com/finskillshub"
+EOF
+```
+
+### Quick flow (3 steps)
+1. Create and bind a tradable paper-trading portfolio in MX
+2. Ask OpenClaw to perform one-click install (or run installer manually)
+3. Let scheduled jobs run on trading days and generate review at 15:10
+
+### Detailed workflow
+#### 1) Schedule
+- 09:24 pre-open scan + order attempt
+- 10:30 intraday second scan
+- 14:30 close-to-end run + cleanup
+- 15:10 daily review generation
+
+#### 2) Trading logic
+- fetch candidates from stock-screen API
+- check capital + position limits
+- place orders and log each attempt
+
+#### 3) Risk control
+- `maxPositionPerStock` hard cap
+- `maxTotalPosition` hard cap
+- `maxTradesPerDay` daily cap
+- auto-cancel stale pending orders (>20 mins)
+
+#### 4) Logs and outputs
+- strategy logs: `~/.openclaw/workspace/mx_autotrade/logs/YYYY-MM-DD.jsonl`
+- global cron log: `~/.openclaw/workspace/mx_autotrade/cron.log`
+- review output: `~/.openclaw/workspace/mx_autotrade/reviews/review-YYYY-MM-DD.json`
+
+#### 5) Tunable params
+Config file: `~/.openclaw/workspace/mx_autotrade/config.json`
+
+Common params:
+- `maxTradesPerDay` (default 6)
+- `maxPositionPerStock` (default 0.15)
+- `maxTotalPosition` (default 0.60)
+- `runTimes` (default `09:24/10:30/14:30`)
+
+---
+
+<a id="chinese"></a>
 ## 中文
 
 ### 这是什么
@@ -81,81 +160,3 @@ EOF
 - `maxPositionPerStock`（默认 0.15）
 - `maxTotalPosition`（默认 0.60）
 - `runTimes`（默认 `09:24/10:30/14:30`）
-
----
-
-## English
-<a id="english"></a>
-
-### What this is
-A-Share Claw is an OpenClaw-based **A-share paper-trading automation workflow** with:
-- scheduled runs on trading days (09:24 / 10:30 / 14:30)
-- risk controls (single-symbol cap, total exposure cap, stale-order cancellation)
-- daily review generation at 15:10
-
-> For paper trading education only. Not financial advice.
-
-### “One sentence to OpenClaw” auto install
-Send this prompt directly to OpenClaw:
-
-```text
-Please one-click install and configure A-Share Claw on this machine: clone https://github.com/YoujunZhao/A-Share-Claw.git, run installer/install.sh, check whether ~/.openclaw/mx.env contains MX_APIKEY (if missing, ask me to provide), then verify cron has the 4 mx_autotrade jobs and report status.
-```
-
-If you already want it to set env too:
-
-```text
-Please one-click install A-Share Claw, write MX_APIKEY into ~/.openclaw/mx.env, complete installation verification, and report final status. Repo: https://github.com/YoujunZhao/A-Share-Claw.git
-```
-
-### Manual install (fallback)
-```bash
-git clone https://github.com/YoujunZhao/A-Share-Claw.git
-cd A-Share-Claw
-bash installer/install.sh
-```
-
-Set env:
-```bash
-cat > ~/.openclaw/mx.env <<'EOF'
-export MX_APIKEY="your_key"
-export MX_API_URL="https://mkapi2.dfcfs.com/finskillshub"
-EOF
-```
-
-### Quick flow (3 steps)
-1. Create and bind a tradable paper-trading portfolio in MX
-2. Ask OpenClaw to perform one-click install (or run installer manually)
-3. Let scheduled jobs run on trading days and generate review at 15:10
-
-### Detailed workflow
-#### 1) Schedule
-- 09:24 pre-open scan + order attempt
-- 10:30 intraday second scan
-- 14:30 close-to-end run + cleanup
-- 15:10 daily review generation
-
-#### 2) Trading logic
-- fetch candidates from stock-screen API
-- check capital + position limits
-- place orders and log each attempt
-
-#### 3) Risk control
-- `maxPositionPerStock` hard cap
-- `maxTotalPosition` hard cap
-- `maxTradesPerDay` daily cap
-- auto-cancel stale pending orders (>20 mins)
-
-#### 4) Logs and outputs
-- strategy logs: `~/.openclaw/workspace/mx_autotrade/logs/YYYY-MM-DD.jsonl`
-- global cron log: `~/.openclaw/workspace/mx_autotrade/cron.log`
-- review output: `~/.openclaw/workspace/mx_autotrade/reviews/review-YYYY-MM-DD.json`
-
-#### 5) Tunable params
-Config file: `~/.openclaw/workspace/mx_autotrade/config.json`
-
-Common params:
-- `maxTradesPerDay` (default 6)
-- `maxPositionPerStock` (default 0.15)
-- `maxTotalPosition` (default 0.60)
-- `runTimes` (default `09:24/10:30/14:30`)
