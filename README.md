@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/logo.jpg" alt="A-Share Claw Logo" width="300" />
+<img src="./assets/logo.jpg" alt="A-Share Claw Logo" width="400" />
 
 # A-Share Claw
 
