@@ -39,24 +39,57 @@ export MX_API_URL="https://mkapi2.dfcfs.com/finskillshub"
 EOF
 ```
 
-## Quick flow
-1. Create and bind a tradable paper-trading portfolio in MX
-2. Run one-click setup
-3. Let scheduled jobs run and generate daily review
+## Detailed workflow
 
-## Schedule
+### 1) Account readiness
+- Create a paper-trading account in MX.
+- Bind a tradable portfolio and set it as current/default.
+- Verify API readiness: balance/positions endpoints should return success (not “please bind account”).
+
+### 2) Environment setup
+- Clone repository and run installer:
+  - `git clone https://github.com/<your-username>/A-Share-Claw.git`
+  - `cd A-Share-Claw && bash installer/install.sh`
+- Configure `~/.openclaw/mx.env`:
+  - `MX_APIKEY`
+  - `MX_API_URL` (default `https://mkapi2.dfcfs.com/finskillshub`)
+
+### 3) Scheduler setup (auto-run)
+The installer writes 4 cron jobs (trading days):
 - 09:24 pre-open scan + order attempt
 - 10:30 intraday second scan
-- 14:30 close-to-end run + cleanup
+- 14:30 close-to-end run + risk cleanup
 - 15:10 daily review generation
 
-## Risk controls
-- `maxPositionPerStock` hard cap
-- `maxTotalPosition` hard cap
-- `maxTradesPerDay` daily cap
-- auto-cancel stale pending orders (>20 mins)
+### 4) Trading execution logic
+- Pull symbol candidates from stock-screen API.
+- Check risk limits and available cash before placing orders.
+- Submit buy orders in controlled lot sizes.
+- Record every order attempt and response to log files.
 
-## Logs and outputs
-- strategy logs: `~/.openclaw/workspace/mx_autotrade/logs/YYYY-MM-DD.jsonl`
-- global log: `~/.openclaw/workspace/mx_autotrade/cron.log`
-- review output: `~/.openclaw/workspace/mx_autotrade/reviews/review-YYYY-MM-DD.json`
+### 5) Risk-control logic
+- Single-symbol hard cap: `maxPositionPerStock`.
+- Total exposure hard cap: `maxTotalPosition`.
+- Daily trade-count cap: `maxTradesPerDay`.
+- Auto-cancel stale pending orders after timeout (>20 mins).
+- Skip new entries when cash is too low or risk caps are hit.
+
+### 6) Daily review pipeline
+- At 15:10, fetch account balance, positions, and order history.
+- Generate a structured JSON review report.
+- Save reports for audit, optimization, and optional Telegram push.
+
+### 7) Logs and artifacts
+- Strategy logs: `~/.openclaw/workspace/mx_autotrade/logs/YYYY-MM-DD.jsonl`
+- Cron aggregate log: `~/.openclaw/workspace/mx_autotrade/cron.log`
+- Review output: `~/.openclaw/workspace/mx_autotrade/reviews/review-YYYY-MM-DD.json`
+
+### 8) Tuning parameters
+Active config file:
+- `~/.openclaw/workspace/mx_autotrade/config.json`
+
+Common parameters:
+- `maxTradesPerDay` (default 6)
+- `maxPositionPerStock` (default 0.15)
+- `maxTotalPosition` (default 0.60)
+- `runTimes` (default `09:24/10:30/14:30`)
