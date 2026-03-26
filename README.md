@@ -21,13 +21,13 @@ An OpenClaw-based **A-share paper-trading automation workflow** with:
 Send this directly to OpenClaw:
 
 ```text
-Please one-click install and configure A-Share Claw on this machine: clone https://github.com/<your-username>/A-Share-Claw.git, run installer/install.sh, check whether ~/.openclaw/mx.env contains MX_APIKEY (if missing, ask me to provide), then verify cron has the 4 mx_autotrade jobs and report status.
+Please one-click install and configure A-Share Claw on this machine: run `git clone https://github.com/YOUR_GITHUB_USERNAME/A-Share-Claw.git`, then run `installer/install.sh`, check whether `~/.openclaw/mx.env` contains `MX_APIKEY` (if missing, ask me to provide), then verify cron has the 4 `mx_autotrade` jobs and report status.
 ```
 
 ## Manual setup
 
 ```bash
-git clone https://github.com/<your-username>/A-Share-Claw.git
+git clone https://github.com/YOUR_GITHUB_USERNAME/A-Share-Claw.git
 cd A-Share-Claw
 bash installer/install.sh
 ```
@@ -48,7 +48,7 @@ EOF
 
 ### 2) Environment setup
 - Clone repository and run installer:
-  - `git clone https://github.com/<your-username>/A-Share-Claw.git`
+  - `git clone https://github.com/YOUR_GITHUB_USERNAME/A-Share-Claw.git`
   - `cd A-Share-Claw && bash installer/install.sh`
 - Configure `~/.openclaw/mx.env`:
   - `MX_APIKEY`
