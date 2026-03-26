@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./assets/logo.jpg" alt="A股龙虾 Logo" width="520" />
+
 # A股龙虾
 
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)

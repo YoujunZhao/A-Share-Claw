@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="./assets/logo.jpg" alt="A-Share Claw Logo" width="520" />
+
 # A-Share Claw
 
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
