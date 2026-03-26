@@ -14,7 +14,7 @@ An OpenClaw-based **A-share paper-trading automation workflow** with:
 
 > For paper trading education only. Not financial advice.
 
-## One-sentence auto setup prompt
+## One-sentence auto setup prompt (OpenClaw)
 
 Send this directly to OpenClaw:
 
