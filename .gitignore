@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+mx_autotrade/config.json
+mx_autotrade/state.json
+mx_autotrade/logs/
+mx_autotrade/reviews/
+*.log
