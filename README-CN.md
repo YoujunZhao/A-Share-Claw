@@ -2,8 +2,8 @@
 
 # A股龙虾
 
-<a href="./README.md"><img alt="US" src="https://flagcdn.com/w40/us.png" height="22"></a>
-<a href="./README-CN.md"><img alt="CN" src="https://flagcdn.com/w40/cn.png" height="22"></a>
+<a href="./README.md"><img alt="US" src="https://img.shields.io/badge/US-README-blue?style=for-the-badge"></a>
+<a href="./README-CN.md"><img alt="CN" src="https://img.shields.io/badge/CN-README-2ea44f?style=for-the-badge"></a>
 
 </div>
 
