@@ -2,8 +2,8 @@
 
 # A股龙虾
 
-<a href="./README.md"><img alt="EN" src="https://img.shields.io/badge/EN-README-blue?style=for-the-badge"></a>
-<a href="./README-CN.md"><img alt="中文" src="https://img.shields.io/badge/%E4%B8%AD%E6%96%87-README-2ea44f?style=for-the-badge"></a>
+[![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
+[![中文](https://img.shields.io/badge/语言-中文-red)](./README-CN.md)
 
 </div>
 
