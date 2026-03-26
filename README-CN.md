@@ -17,13 +17,13 @@
 把下面这句话直接发给 OpenClaw：
 
 ```text
-请在我的机器上一键安装并配置 A-Share Claw（A股龙虾）：克隆 https://github.com/YoujunZhao/A-Share-Claw.git，执行 installer/install.sh，检查 ~/.openclaw/mx.env 是否有 MX_APIKEY（没有就提醒我补），安装后验证 crontab 里有 mx_autotrade 的 4 条定时任务，并回报结果。
+请在我的机器上一键安装并配置 A-Share Claw（A股龙虾）：克隆 https://github.com/<你的用户名>/A-Share-Claw.git，执行 installer/install.sh，检查 ~/.openclaw/mx.env 是否有 MX_APIKEY（没有就提醒我补），安装后验证 crontab 里有 mx_autotrade 的 4 条定时任务，并回报结果。
 ```
 
 ## 手动安装
 
 ```bash
-git clone https://github.com/YoujunZhao/A-Share-Claw.git
+git clone https://github.com/<你的用户名>/A-Share-Claw.git
 cd A-Share-Claw
 bash installer/install.sh
 ```
