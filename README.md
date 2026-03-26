@@ -1,9 +1,11 @@
+<div align="center">
+
 # A-Share Claw
 
-<p>
-  <a href="./README.md"><img alt="US" src="https://img.shields.io/badge/%F0%9F%87%BA%F0%9F%87%B8-Docs-blue"></a>
-  <a href="./README-CN.md"><img alt="CN" src="https://img.shields.io/badge/%F0%9F%87%A8%F0%9F%87%B3-%E6%96%87%E6%A1%A3-red"></a>
-</p>
+<a href="./README.md"><img alt="🇺🇸" src="https://img.shields.io/badge/%F0%9F%87%BA%F0%9F%87%B8-README-2ea44f"></a>
+<a href="./README-CN.md"><img alt="🇨🇳" src="https://img.shields.io/badge/%F0%9F%87%A8%F0%9F%87%B3-README-orange"></a>
+
+</div>
 
 An OpenClaw-based **A-share paper-trading automation workflow** with:
 - scheduled runs on trading days (09:24 / 10:30 / 14:30)
