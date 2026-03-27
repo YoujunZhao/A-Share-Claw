@@ -47,50 +47,50 @@ EOF
 
 ## 详细流程
 
-### 1）账户准备
+### 1）安装
+  - 选择一键安装 （发送安装提示词给OpenClaw）或者手动安装。
+
+### 2）账户准备
+- 下载东方财富APP，注册账号
+- APP打开搜索：妙想skills。复制提示词 & Key，发给OpenClaw。
 - 在妙想创建模拟交易账户。
 - 绑定可交易组合，并设为当前/默认组合。
 - 接口自检通过：`balance/positions` 返回成功，而不是“请先绑定账户”。
 
-### 2）环境安装
-- 克隆并执行安装：
-  - `git clone https://github.com/YoujunZhao/A-Share-Claw.git`
-  - `cd A-Share-Claw && bash installer/install.sh`
-- 配置 `~/.openclaw/mx.env`：
-  - `MX_APIKEY`
-  - `MX_API_URL`（默认 `https://mkapi2.dfcfs.com/finskillshub`）
 
-### 3）定时任务（自动执行）
+## 交易策略
+
+### 1）定时任务（自动执行）
 安装脚本会写入 4 条交易日定时任务：
 - 09:24 竞价前扫描并尝试下单
 - 10:30 盘中第二轮扫描
 - 14:30 尾盘执行 + 风控清理
 - 15:10 生成每日复盘
 
-### 4）交易执行逻辑
+### 2）交易执行逻辑
 - 从选股接口拉取候选标的。
 - 下单前检查仓位限制与可用资金。
 - 按控制后的手数提交买单。
 - 每笔委托和返回结果都写入日志。
 
-### 5）风控逻辑
+### 3）风控逻辑
 - 单票仓位硬限制：`maxPositionPerStock`。
 - 总仓位硬限制：`maxTotalPosition`。
 - 每日交易次数限制：`maxTradesPerDay`。
 - 挂单超时自动撤单（>20 分钟未成交）。
 - 现金不足或触发仓位限制时自动跳过开仓。
 
-### 6）每日复盘流程
+### 4）每日复盘流程
 - 15:10 自动读取资金、持仓、委托。
 - 生成结构化 JSON 复盘报告。
 - 用于审计、策略优化和 Telegram 推送。
 
-### 7）日志与产物
+### 5）日志与产物
 - 策略日志：`~/.openclaw/workspace/mx_autotrade/logs/YYYY-MM-DD.jsonl`
 - 总日志：`~/.openclaw/workspace/mx_autotrade/cron.log`
 - 每日复盘：`~/.openclaw/workspace/mx_autotrade/reviews/review-YYYY-MM-DD.json`
 
-### 8）参数调优
+### 6）参数调优
 生效配置文件：
 - `~/.openclaw/workspace/mx_autotrade/config.json`
 
