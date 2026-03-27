@@ -47,50 +47,50 @@ EOF
 
 ## Detailed workflow
 
-### 1) Account preparation
+### 1) Installation
+- Choose one-click installation (send the setup prompt to OpenClaw) or manual installation.
+
+### 2) Account preparation
+- Download the Eastmoney app and register an account.
+- In the app, search for: `妙想skills`.
+- Copy the prompt text and API key, then send them to OpenClaw.
 - Create a paper-trading account in MX.
 - Bind a tradable portfolio and set it as current/default.
 - Pass API self-check: `balance/positions` should return success, not “please bind account”.
 
-### 2) Environment installation
-- Clone and run installer:
-  - `git clone https://github.com/YoujunZhao/A-Share-Claw.git`
-  - `cd A-Share-Claw && bash installer/install.sh`
-- Configure `~/.openclaw/mx.env`:
-  - `MX_APIKEY`
-  - `MX_API_URL` (default: `https://mkapi2.dfcfs.com/finskillshub`)
+## Trading strategy
 
-### 3) Scheduled tasks (auto execution)
+### 1) Scheduled tasks (auto execution)
 The installer writes 4 trading-day cron jobs:
 - 09:24 pre-open scan and order attempt
 - 10:30 second intraday scan
 - 14:30 late-session execution + risk cleanup
 - 15:10 generate daily review
 
-### 4) Trading strategy
+### 2) Trade execution logic
 - Pull candidate symbols from the stock-screen endpoint.
 - Check position limits and available cash before sending orders.
 - Submit buy orders with controlled lot sizing.
 - Write each order request and response to logs.
 
-### 5) Risk-control strategy
+### 3) Risk-control logic
 - Hard single-symbol cap: `maxPositionPerStock`.
 - Hard total exposure cap: `maxTotalPosition`.
 - Daily trade-count limit: `maxTradesPerDay`.
 - Auto-cancel stale pending orders (>20 minutes unfilled).
 - Automatically skip opening new positions when cash is insufficient or limits are hit.
 
-### 6) Daily review process
+### 4) Daily review workflow
 - At 15:10, automatically read balance, positions, and order history.
 - Generate a structured JSON review report.
 - Use reports for audit, strategy optimization, and Telegram push.
 
-### 7) Logs and outputs
+### 5) Logs and artifacts
 - Strategy logs: `~/.openclaw/workspace/mx_autotrade/logs/YYYY-MM-DD.jsonl`
 - Aggregate cron log: `~/.openclaw/workspace/mx_autotrade/cron.log`
 - Daily review: `~/.openclaw/workspace/mx_autotrade/reviews/review-YYYY-MM-DD.json`
 
-### 8) Parameter tuning
+### 6) Parameter tuning
 Effective config file:
 - `~/.openclaw/workspace/mx_autotrade/config.json`
 
