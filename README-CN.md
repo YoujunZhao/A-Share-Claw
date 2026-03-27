@@ -24,6 +24,12 @@
 
 ## 一句话安装 Skill
 
+### skill-installer 风格（和你说的一样）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/YoujunZhao/A-Share-Claw/main/installer/skill-installer.sh | bash -s -- install https://github.com/YoujunZhao/A-Share-Claw
+```
+
 ### OpenClaw
 
 ```bash

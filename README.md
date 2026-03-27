@@ -24,6 +24,12 @@ An OpenClaw-based **A-share paper-trading automation workflow** with:
 
 ## One-line Skill install
 
+### skill-installer style (same UX you mentioned)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/YoujunZhao/A-Share-Claw/main/installer/skill-installer.sh | bash -s -- install https://github.com/YoujunZhao/A-Share-Claw
+```
+
 ### OpenClaw
 
 ```bash
