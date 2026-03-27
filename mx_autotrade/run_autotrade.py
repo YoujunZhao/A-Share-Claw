@@ -21,6 +21,13 @@ def post(path, payload):
     return r.json()
 
 
+def safe_post(path, payload):
+    try:
+        return post(path, payload), None
+    except Exception as e:
+        return None, str(e)
+
+
 def load_state():
     if STATE_FILE.exists():
         return json.loads(STATE_FILE.read_text(encoding="utf-8"))
@@ -40,24 +47,122 @@ def extract_codes(resp):
     return list(dict.fromkeys(re.findall(r"\b[036]\d{5}\b", text)))
 
 
-def pick_candidates():
-    queries = [
-        "A股 今日强势 放量 上涨 趋势",
-        "A股 近5日强势 短线",
-    ]
-    out = []
-    for q in queries:
-        try:
-            res = post("/api/claw/stock-screen", {"keyword": q})
-            out.extend(extract_codes(res))
-        except Exception:
-            pass
-    return list(dict.fromkeys(out))[:20]
-
-
 def append_log(logf, payload):
     with logf.open("a", encoding="utf-8") as f:
         f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def try_optional(paths_and_payloads):
+    """Try optional endpoints; return first successful response."""
+    for path, payload in paths_and_payloads:
+        rsp, err = safe_post(path, payload)
+        if rsp is not None:
+            return path, rsp, None
+    return None, None, "all_failed"
+
+
+def layer1_news_keywords(logf, now):
+    """Layer1: info search (optional) to enrich screening keywords."""
+    base_keywords = ["A股 今日强势 放量 趋势", "A股 短线 资金流入", "A股 低位放量 反转"]
+    _, rsp, err = try_optional([
+        ("/api/claw/news-search", {"keyword": "A股 今日热点 资金 风口"}),
+        ("/api/claw/stock-news", {"keyword": "A股 今日热点 资金 风口"}),
+        ("/api/claw/search", {"keyword": "A股 今日热点 资金 风口"}),
+    ])
+
+    if rsp is None:
+        append_log(logf, {"ts": now.isoformat(), "event": "layer1_news_skip", "reason": err})
+        return base_keywords
+
+    txt = json.dumps(rsp, ensure_ascii=False)
+    extras = []
+    for k in ["涨停", "放量", "业绩", "资金流入", "突破", "回踩", "高景气", "电力", "算力", "光伏"]:
+        if k in txt:
+            extras.append(k)
+    extras = list(dict.fromkeys(extras))[:3]
+    kws = base_keywords + [f"A股 {x} 短线" for x in extras]
+    append_log(logf, {"ts": now.isoformat(), "event": "layer1_news_ok", "extraKeywords": extras})
+    return kws
+
+
+def layer2_financial_ok(code, logf, now):
+    """Layer2: optional fundamental filter; fail-open when endpoint unavailable."""
+    endpoint_candidates = [
+        ("/api/claw/financial-data", {"stockCode": code}),
+        ("/api/claw/stock-financial", {"stockCode": code}),
+        ("/api/claw/quote", {"stockCode": code}),
+    ]
+    _, rsp, _ = try_optional(endpoint_candidates)
+    if rsp is None:
+        return True, {"mode": "fail_open", "reason": "financial_endpoint_unavailable"}
+
+    text = json.dumps(rsp, ensure_ascii=False)
+    # Very light guardrails from any parsable fields in payload
+    pe = re.search(r'"(?:pe|peTtm|peRatio)"\s*:\s*(-?\d+\.?\d*)', text)
+    roe = re.search(r'"(?:roe|roeWeighted)"\s*:\s*(-?\d+\.?\d*)', text)
+    growth = re.search(r'"(?:netProfitGrowth|profitYoY|yoy)"\s*:\s*(-?\d+\.?\d*)', text)
+
+    pe_v = float(pe.group(1)) if pe else None
+    roe_v = float(roe.group(1)) if roe else None
+    growth_v = float(growth.group(1)) if growth else None
+
+    if pe_v is not None and pe_v > 120:
+        return False, {"reason": "pe_too_high", "pe": pe_v}
+    if roe_v is not None and roe_v < 0:
+        return False, {"reason": "roe_negative", "roe": roe_v}
+    if growth_v is not None and growth_v < -20:
+        return False, {"reason": "profit_growth_too_low", "growth": growth_v}
+    return True, {"reason": "pass", "pe": pe_v, "roe": roe_v, "growth": growth_v}
+
+
+def layer3_sync_watchlist(codes, logf, now):
+    """Layer3: optional self-select sync for observability (no hard dependency)."""
+    payload = {"codes": codes[:20]}
+    path, rsp, err = try_optional([
+        ("/api/claw/selfselect/sync", payload),
+        ("/api/claw/selfselect/update", payload),
+        ("/api/claw/selfselect/add", payload),
+    ])
+    if rsp is None:
+        append_log(logf, {"ts": now.isoformat(), "event": "layer3_watchlist_skip", "reason": err})
+        return
+    append_log(logf, {"ts": now.isoformat(), "event": "layer3_watchlist_ok", "path": path, "count": len(codes[:20])})
+
+
+def pick_candidates_with_layers(logf, now):
+    """Layer1+Layer2+Layer3 around stock screening.
+
+    Layer4 execution remains in main() via mockTrading endpoints.
+    """
+    # Layer1: info search -> dynamic keywords
+    queries = layer1_news_keywords(logf, now)
+
+    raw = []
+    for q in queries:
+        rsp, err = safe_post("/api/claw/stock-screen", {"keyword": q})
+        if rsp is None:
+            append_log(logf, {"ts": now.isoformat(), "event": "stock_screen_error", "q": q, "err": err})
+            continue
+        raw.extend(extract_codes(rsp))
+
+    candidates = list(dict.fromkeys(raw))[:30]
+    if not candidates:
+        return []
+
+    # Layer2: optional financial filter
+    passed = []
+    for c in candidates:
+        ok, detail = layer2_financial_ok(c, logf, now)
+        append_log(logf, {"ts": now.isoformat(), "event": "layer2_financial_check", "code": c, "ok": ok, "detail": detail})
+        if ok:
+            passed.append(c)
+        if len(passed) >= 20:
+            break
+
+    # Layer3: optional selfselect sync
+    layer3_sync_watchlist(passed, logf, now)
+    append_log(logf, {"ts": now.isoformat(), "event": "four_layer_pipeline", "layer1": True, "layer2": True, "layer3": True, "layer4": True, "candidateCount": len(passed)})
+    return passed
 
 
 def cleanup_pending_orders(now, logf):
@@ -112,6 +217,8 @@ def main():
     # 先清理超时挂单
     cleanup_pending_orders(now, logf)
 
+    risk_window = (hhmm == "14:30")
+
     bal = post("/api/claw/mockTrading/balance", {})
     if (bal.get("status") or bal.get("code")) not in (0, "0", 200, "200"):
         append_log(logf, {"ts": now.isoformat(), "event": "balance_error", "resp": bal})
@@ -123,6 +230,77 @@ def main():
     avail = to_yuan(d.get("availBalance"), unit)
     total_pos_value = to_yuan(d.get("totalPosValue"), unit)
     pos_pct = (total_pos_value / total_assets) if total_assets > 0 else 0
+
+    pos = post("/api/claw/mockTrading/positions", {})
+    plist = (pos.get("data") or {}).get("posList") or []
+    pos_unit = (pos.get("data") or {}).get("currencyUnit", 1000)
+    held_value = {}
+    for p in plist:
+        code = p.get("secCode")
+        if code:
+            held_value[code] = to_yuan(p.get("value"), pos_unit)
+
+    single_cap = total_assets * CFG["maxPositionPerStock"]
+    over_single = []
+    for p in plist:
+        code = p.get("secCode")
+        value = to_yuan(p.get("value"), pos_unit)
+        ratio = (value / total_assets) if total_assets > 0 else 0
+        if code and ratio > CFG["maxPositionPerStock"] + 1e-9:
+            over_single.append((p, value, ratio))
+
+    # 14:30 优先风控：若超限则减仓，不开新仓
+    if risk_window:
+        sold_any = False
+        for p, value, ratio in over_single:
+            code = p.get("secCode")
+            count = int(p.get("availCount") or p.get("count") or 0)
+            if count < 100:
+                continue
+            px = (value / count) if count > 0 else 0
+            if px <= 0:
+                continue
+            target_count = int((single_cap / px) // 100 * 100)
+            sell_qty = max(0, count - target_count)
+            sell_qty = int((sell_qty // 100) * 100)
+            if sell_qty < 100:
+                continue
+            try:
+                rsp = post("/api/claw/mockTrading/trade", {
+                    "type": "sell",
+                    "stockCode": code,
+                    "quantity": sell_qty,
+                    "useMarketPrice": True,
+                })
+                sold_any = True
+                append_log(logf, {
+                    "ts": now.isoformat(), "event": "risk_reduce_single_position",
+                    "stockCode": code, "sellQty": sell_qty, "ratio": round(ratio, 4), "resp": rsp
+                })
+            except Exception as e:
+                append_log(logf, {
+                    "ts": now.isoformat(), "event": "risk_reduce_single_position_error",
+                    "stockCode": code, "err": str(e)
+                })
+
+        append_log(logf, {
+            "ts": now.isoformat(),
+            "event": "risk_priority_window",
+            "note": "14:30 risk-first: no new buy orders",
+            "overSingleCount": len(over_single),
+            "soldAny": sold_any
+        })
+        save_state(state)
+        return
+
+    if over_single:
+        append_log(logf, {
+            "ts": now.isoformat(),
+            "event": "skip_buy_due_single_position_limit",
+            "violations": [{"stockCode": x[0].get("secCode"), "ratio": round(x[2], 4)} for x in over_single]
+        })
+        save_state(state)
+        return
 
     if state["trades"] >= CFG["maxTradesPerDay"]:
         append_log(logf, {"ts": now.isoformat(), "event": "skip_max_trades", "trades": state["trades"]})
@@ -142,15 +320,8 @@ def main():
         save_state(state)
         return
 
-    pos = post("/api/claw/mockTrading/positions", {})
-    plist = (pos.get("data") or {}).get("posList") or []
-    held_value = {}
-    for p in plist:
-        code = p.get("secCode")
-        if code:
-            held_value[code] = to_yuan(p.get("value"), (pos.get("data") or {}).get("currencyUnit", 1000))
-
-    candidates = pick_candidates()
+    # Four-layer pipeline candidates
+    candidates = pick_candidates_with_layers(logf, now)
     if not candidates:
         append_log(logf, {"ts": now.isoformat(), "event": "no_candidates"})
         save_state(state)
