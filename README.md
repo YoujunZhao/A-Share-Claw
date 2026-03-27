@@ -47,55 +47,55 @@ EOF
 
 ## Detailed workflow
 
-### 1) Account readiness
+### 1) Account preparation
 - Create a paper-trading account in MX.
 - Bind a tradable portfolio and set it as current/default.
-- Verify API readiness: balance/positions endpoints should return success (not “please bind account”).
+- Pass API self-check: `balance/positions` should return success, not “please bind account”.
 
-### 2) Environment setup
-- Clone repository and run installer:
+### 2) Environment installation
+- Clone and run installer:
   - `git clone https://github.com/YoujunZhao/A-Share-Claw.git`
   - `cd A-Share-Claw && bash installer/install.sh`
 - Configure `~/.openclaw/mx.env`:
   - `MX_APIKEY`
-  - `MX_API_URL` (default `https://mkapi2.dfcfs.com/finskillshub`)
+  - `MX_API_URL` (default: `https://mkapi2.dfcfs.com/finskillshub`)
 
-### 3) Scheduler setup (auto-run)
-The installer writes 4 cron jobs (trading days):
-- 09:24 pre-open scan + order attempt
-- 10:30 intraday second scan
-- 14:30 close-to-end run + risk cleanup
-- 15:10 daily review generation
+### 3) Scheduled tasks (auto execution)
+The installer writes 4 trading-day cron jobs:
+- 09:24 pre-open scan and order attempt
+- 10:30 second intraday scan
+- 14:30 late-session execution + risk cleanup
+- 15:10 generate daily review
 
-### 4) Trading execution logic
-- Pull symbol candidates from stock-screen API.
-- Check risk limits and available cash before placing orders.
-- Submit buy orders in controlled lot sizes.
-- Record every order attempt and response to log files.
+### 4) Trading strategy
+- Pull candidate symbols from the stock-screen endpoint.
+- Check position limits and available cash before sending orders.
+- Submit buy orders with controlled lot sizing.
+- Write each order request and response to logs.
 
-### 5) Risk-control logic
-- Single-symbol hard cap: `maxPositionPerStock`.
-- Total exposure hard cap: `maxTotalPosition`.
-- Daily trade-count cap: `maxTradesPerDay`.
-- Auto-cancel stale pending orders after timeout (>20 mins).
-- Skip new entries when cash is too low or risk caps are hit.
+### 5) Risk-control strategy
+- Hard single-symbol cap: `maxPositionPerStock`.
+- Hard total exposure cap: `maxTotalPosition`.
+- Daily trade-count limit: `maxTradesPerDay`.
+- Auto-cancel stale pending orders (>20 minutes unfilled).
+- Automatically skip opening new positions when cash is insufficient or limits are hit.
 
-### 6) Daily review pipeline
-- At 15:10, fetch account balance, positions, and order history.
+### 6) Daily review process
+- At 15:10, automatically read balance, positions, and order history.
 - Generate a structured JSON review report.
-- Save reports for audit, optimization, and optional Telegram push.
+- Use reports for audit, strategy optimization, and Telegram push.
 
-### 7) Logs and artifacts
+### 7) Logs and outputs
 - Strategy logs: `~/.openclaw/workspace/mx_autotrade/logs/YYYY-MM-DD.jsonl`
-- Cron aggregate log: `~/.openclaw/workspace/mx_autotrade/cron.log`
-- Review output: `~/.openclaw/workspace/mx_autotrade/reviews/review-YYYY-MM-DD.json`
+- Aggregate cron log: `~/.openclaw/workspace/mx_autotrade/cron.log`
+- Daily review: `~/.openclaw/workspace/mx_autotrade/reviews/review-YYYY-MM-DD.json`
 
-### 8) Tuning parameters
-Active config file:
+### 8) Parameter tuning
+Effective config file:
 - `~/.openclaw/workspace/mx_autotrade/config.json`
 
 Common parameters:
-- `maxTradesPerDay` (default 6)
-- `maxPositionPerStock` (default 0.15)
-- `maxTotalPosition` (default 0.60)
-- `runTimes` (default `09:24/10:30/14:30`)
+- `maxTradesPerDay` (default: 6)
+- `maxPositionPerStock` (default: 0.15)
+- `maxTotalPosition` (default: 0.60)
+- `runTimes` (default: `09:24/10:30/14:30`)
