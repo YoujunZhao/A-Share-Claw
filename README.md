@@ -22,32 +22,6 @@ An OpenClaw-based **A-share paper-trading automation workflow** with:
 
 > For paper trading education only. Not financial advice.
 
-## One-line Skill install
-
-### skill-installer style (same UX you mentioned)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/YoujunZhao/A-Share-Claw/main/installer/skill-installer.sh | bash -s -- install https://github.com/YoujunZhao/A-Share-Claw
-```
-
-### OpenClaw
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/YoujunZhao/A-Share-Claw/main/installer/install-skill.sh | TARGET=openclaw bash
-```
-
-### Codex
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/YoujunZhao/A-Share-Claw/main/installer/install-skill.sh | TARGET=codex bash
-```
-
-### Install both
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/YoujunZhao/A-Share-Claw/main/installer/install-skill.sh | bash
-```
-
 ## One-sentence auto setup prompt (OpenClaw)
 
 Send this directly to OpenClaw:

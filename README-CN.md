@@ -22,32 +22,6 @@
 
 > 仅用于模拟盘学习，不构成投资建议。
 
-## 一句话安装 Skill
-
-### skill-installer 风格（和你说的一样）
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/YoujunZhao/A-Share-Claw/main/installer/skill-installer.sh | bash -s -- install https://github.com/YoujunZhao/A-Share-Claw
-```
-
-### OpenClaw
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/YoujunZhao/A-Share-Claw/main/installer/install-skill.sh | TARGET=openclaw bash
-```
-
-### Codex
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/YoujunZhao/A-Share-Claw/main/installer/install-skill.sh | TARGET=codex bash
-```
-
-### 两边都装
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/YoujunZhao/A-Share-Claw/main/installer/install-skill.sh | bash
-```
-
 ## 一句话自动安装提示词 (OpenClaw)
 
 把下面这句话直接发给 OpenClaw：
