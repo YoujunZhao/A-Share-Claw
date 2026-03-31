@@ -62,9 +62,11 @@ def try_optional(paths_and_payloads):
 
 
 def layer1_news_keywords(logf, now):
-    """Layer1: info search (optional) to enrich screening keywords."""
+    """Layer1: 妙想资讯搜索 skill（优先）+ 回退检索接口。"""
     base_keywords = ["A股 今日强势 放量 趋势", "A股 短线 资金流入", "A股 低位放量 反转"]
-    _, rsp, err = try_optional([
+    path, rsp, err = try_optional([
+        ("/api/claw/mx-search/news", {"keyword": "A股 今日热点 资金 风口"}),
+        ("/api/claw/mx-search/query", {"keyword": "A股 今日热点 资金 风口"}),
         ("/api/claw/news-search", {"keyword": "A股 今日热点 资金 风口"}),
         ("/api/claw/stock-news", {"keyword": "A股 今日热点 资金 风口"}),
         ("/api/claw/search", {"keyword": "A股 今日热点 资金 风口"}),
@@ -81,19 +83,23 @@ def layer1_news_keywords(logf, now):
             extras.append(k)
     extras = list(dict.fromkeys(extras))[:3]
     kws = base_keywords + [f"A股 {x} 短线" for x in extras]
-    append_log(logf, {"ts": now.isoformat(), "event": "layer1_news_ok", "extraKeywords": extras})
+    append_log(logf, {"ts": now.isoformat(), "event": "layer1_news_ok", "path": path, "extraKeywords": extras})
     return kws
 
 
 def layer2_financial_ok(code, logf, now):
-    """Layer2: optional fundamental filter; fail-open when endpoint unavailable."""
+    """Layer2: 妙想金融数据 skill（优先）；默认 fail-open，可切 strict。"""
     endpoint_candidates = [
+        ("/api/claw/mx-data/financial", {"stockCode": code}),
+        ("/api/claw/mx-data/quote", {"stockCode": code}),
         ("/api/claw/financial-data", {"stockCode": code}),
         ("/api/claw/stock-financial", {"stockCode": code}),
         ("/api/claw/quote", {"stockCode": code}),
     ]
-    _, rsp, _ = try_optional(endpoint_candidates)
+    path, rsp, _ = try_optional(endpoint_candidates)
     if rsp is None:
+        if CFG.get("strictFinancialSkill", False):
+            return False, {"mode": "strict", "reason": "financial_endpoint_unavailable"}
         return True, {"mode": "fail_open", "reason": "financial_endpoint_unavailable"}
 
     text = json.dumps(rsp, ensure_ascii=False)
@@ -107,26 +113,29 @@ def layer2_financial_ok(code, logf, now):
     growth_v = float(growth.group(1)) if growth else None
 
     if pe_v is not None and pe_v > 120:
-        return False, {"reason": "pe_too_high", "pe": pe_v}
+        return False, {"path": path, "reason": "pe_too_high", "pe": pe_v}
     if roe_v is not None and roe_v < 0:
-        return False, {"reason": "roe_negative", "roe": roe_v}
+        return False, {"path": path, "reason": "roe_negative", "roe": roe_v}
     if growth_v is not None and growth_v < -20:
-        return False, {"reason": "profit_growth_too_low", "growth": growth_v}
-    return True, {"reason": "pass", "pe": pe_v, "roe": roe_v, "growth": growth_v}
+        return False, {"path": path, "reason": "profit_growth_too_low", "growth": growth_v}
+    return True, {"path": path, "reason": "pass", "pe": pe_v, "roe": roe_v, "growth": growth_v}
 
 
 def layer3_sync_watchlist(codes, logf, now):
-    """Layer3: optional self-select sync for observability (no hard dependency)."""
+    """Layer3: 妙想自选股管理 skill（优先）；默认弱依赖，可切 strict。"""
     payload = {"codes": codes[:20]}
     path, rsp, err = try_optional([
+        ("/api/claw/mx-selfselect/sync", payload),
+        ("/api/claw/mx-selfselect/update", payload),
         ("/api/claw/selfselect/sync", payload),
         ("/api/claw/selfselect/update", payload),
         ("/api/claw/selfselect/add", payload),
     ])
     if rsp is None:
         append_log(logf, {"ts": now.isoformat(), "event": "layer3_watchlist_skip", "reason": err})
-        return
+        return not CFG.get("strictWatchlistSkill", False)
     append_log(logf, {"ts": now.isoformat(), "event": "layer3_watchlist_ok", "path": path, "count": len(codes[:20])})
+    return True
 
 
 def pick_candidates_with_layers(logf, now):
@@ -160,8 +169,12 @@ def pick_candidates_with_layers(logf, now):
             break
 
     # Layer3: optional selfselect sync
-    layer3_sync_watchlist(passed, logf, now)
-    append_log(logf, {"ts": now.isoformat(), "event": "four_layer_pipeline", "layer1": True, "layer2": True, "layer3": True, "layer4": True, "candidateCount": len(passed)})
+    layer3_ok = layer3_sync_watchlist(passed, logf, now)
+    if not layer3_ok:
+        append_log(logf, {"ts": now.isoformat(), "event": "layer3_blocked", "reason": "strict_watchlist_enabled"})
+        return []
+
+    append_log(logf, {"ts": now.isoformat(), "event": "four_layer_pipeline", "layer1": True, "layer2": True, "layer3": bool(layer3_ok), "layer4": True, "candidateCount": len(passed)})
     return passed
 
 
@@ -218,6 +231,7 @@ def main():
     cleanup_pending_orders(now, logf)
 
     risk_window = (hhmm == "14:30")
+    allow_buy_1430 = bool(CFG.get("allowBuyAt1430", False))
 
     bal = post("/api/claw/mockTrading/balance", {})
     if (bal.get("status") or bal.get("code")) not in (0, "0", 200, "200"):
@@ -249,7 +263,7 @@ def main():
         if code and ratio > CFG["maxPositionPerStock"] + 1e-9:
             over_single.append((p, value, ratio))
 
-    # 14:30 优先风控：若超限则减仓，不开新仓
+    # 14:30 先做风控；可配置是否允许继续开新仓
     if risk_window:
         sold_any = False
         for p, value, ratio in over_single:
@@ -286,12 +300,14 @@ def main():
         append_log(logf, {
             "ts": now.isoformat(),
             "event": "risk_priority_window",
-            "note": "14:30 risk-first: no new buy orders",
+            "note": "14:30 risk-first: allow new buy orders" if allow_buy_1430 else "14:30 risk-first: no new buy orders",
+            "allowBuyAt1430": allow_buy_1430,
             "overSingleCount": len(over_single),
             "soldAny": sold_any
         })
-        save_state(state)
-        return
+        if not allow_buy_1430:
+            save_state(state)
+            return
 
     if over_single:
         append_log(logf, {
