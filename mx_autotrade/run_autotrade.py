@@ -263,40 +263,41 @@ def main():
         if code and ratio > CFG["maxPositionPerStock"] + 1e-9:
             over_single.append((p, value, ratio))
 
-    # 14:30 先做风控；可配置是否允许继续开新仓
-    if risk_window:
-        sold_any = False
-        for p, value, ratio in over_single:
-            code = p.get("secCode")
-            count = int(p.get("availCount") or p.get("count") or 0)
-            if count < 100:
-                continue
-            px = (value / count) if count > 0 else 0
-            if px <= 0:
-                continue
-            target_count = int((single_cap / px) // 100 * 100)
-            sell_qty = max(0, count - target_count)
-            sell_qty = int((sell_qty // 100) * 100)
-            if sell_qty < 100:
-                continue
-            try:
-                rsp = post("/api/claw/mockTrading/trade", {
-                    "type": "sell",
-                    "stockCode": code,
-                    "quantity": sell_qty,
-                    "useMarketPrice": True,
-                })
-                sold_any = True
-                append_log(logf, {
-                    "ts": now.isoformat(), "event": "risk_reduce_single_position",
-                    "stockCode": code, "sellQty": sell_qty, "ratio": round(ratio, 4), "resp": rsp
-                })
-            except Exception as e:
-                append_log(logf, {
-                    "ts": now.isoformat(), "event": "risk_reduce_single_position_error",
-                    "stockCode": code, "err": str(e)
-                })
+    # 任意时段只要单票超限就先减仓（调仓）
+    sold_any = False
+    for p, value, ratio in over_single:
+        code = p.get("secCode")
+        count = int(p.get("availCount") or p.get("count") or 0)
+        if count < 100:
+            continue
+        px = (value / count) if count > 0 else 0
+        if px <= 0:
+            continue
+        target_count = int((single_cap / px) // 100 * 100)
+        sell_qty = max(0, count - target_count)
+        sell_qty = int((sell_qty // 100) * 100)
+        if sell_qty < 100:
+            continue
+        try:
+            rsp = post("/api/claw/mockTrading/trade", {
+                "type": "sell",
+                "stockCode": code,
+                "quantity": sell_qty,
+                "useMarketPrice": True,
+            })
+            sold_any = True
+            append_log(logf, {
+                "ts": now.isoformat(), "event": "risk_reduce_single_position",
+                "stockCode": code, "sellQty": sell_qty, "ratio": round(ratio, 4), "resp": rsp
+            })
+        except Exception as e:
+            append_log(logf, {
+                "ts": now.isoformat(), "event": "risk_reduce_single_position_error",
+                "stockCode": code, "err": str(e)
+            })
 
+    # 14:30 仍保留风控优先语义（是否继续开新仓由开关决定）
+    if risk_window:
         append_log(logf, {
             "ts": now.isoformat(),
             "event": "risk_priority_window",
