@@ -301,7 +301,7 @@ def main():
         append_log(logf, {
             "ts": now.isoformat(),
             "event": "risk_priority_window",
-            "note": "14:00 risk-first: allow new buy orders" if allow_buy_1430 else "14:00 risk-first: no new buy orders",
+            "note": "14:30 risk-first: allow new buy orders" if allow_buy_1430 else "14:30 risk-first: no new buy orders",
             "allowBuyAt1430": allow_buy_1430,
             "overSingleCount": len(over_single),
             "soldAny": sold_any
