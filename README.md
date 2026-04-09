@@ -4,7 +4,7 @@
 
 # A-Share Claw
 
-| Day | Vs Day1 | Daily Return | Day | Vs Day1 | Daily Return |
+| Day | Balance | Daily Return | Day | Balance | Daily Return |
 |---|---:|---:|---|---:|---:|
 | Day1 | +0.00% | 0.00% | Day2 | -0.57% | -0.57% |
 | Day3 | -0.64% | -0.08% | Day4 | -0.60% | +0.04% |
