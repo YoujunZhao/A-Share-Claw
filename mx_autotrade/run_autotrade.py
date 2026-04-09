@@ -30,8 +30,12 @@ def safe_post(path, payload):
 
 def load_state():
     if STATE_FILE.exists():
-        return json.loads(STATE_FILE.read_text(encoding="utf-8"))
-    return {"date": None, "trades": 0}
+        s = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    else:
+        s = {"date": None, "trades": 0}
+    s.setdefault("holdMeta", {})
+    s.setdefault("slotHistory", [])
+    return s
 
 
 def save_state(s):
@@ -59,6 +63,140 @@ def try_optional(paths_and_payloads):
         if rsp is not None:
             return path, rsp, None
     return None, None, "all_failed"
+
+
+def normalize_slots(slots):
+    return slots[-20:]
+
+
+def register_slot(state, hhmm):
+    hist = normalize_slots(state.get("slotHistory") or [])
+    if not hist or hist[-1] != hhmm:
+        hist.append(hhmm)
+    state["slotHistory"] = normalize_slots(hist)
+
+
+def current_slot_index(state):
+    hist = state.get("slotHistory") or []
+    return len(hist) - 1 if hist else 0
+
+
+def ensure_hold_meta_for_positions(state, plist):
+    meta = state.setdefault("holdMeta", {})
+    live_codes = set()
+    for p in plist:
+        code = p.get("secCode")
+        count = int(p.get("count") or 0)
+        if not code or count <= 0:
+            continue
+        live_codes.add(code)
+        item = meta.setdefault(code, {})
+        item.setdefault("firstSeenDate", state.get("date"))
+        item.setdefault("firstSlot", current_slot_index(state))
+        item.setdefault("buyCount", 0)
+        item["lastSeenDate"] = state.get("date")
+        item["lastSeenSlot"] = current_slot_index(state)
+        item["lastKnownCount"] = count
+    for code in list(meta.keys()):
+        if code not in live_codes:
+            meta.pop(code, None)
+
+
+def mark_buy_in_state(state, code, qty, hhmm):
+    meta = state.setdefault("holdMeta", {})
+    item = meta.setdefault(code, {})
+    item.setdefault("firstSeenDate", state.get("date"))
+    item.setdefault("firstSlot", current_slot_index(state))
+    item["lastBuyDate"] = state.get("date")
+    item["lastBuyTime"] = hhmm
+    item["lastBuySlot"] = current_slot_index(state)
+    item["buyCount"] = int(item.get("buyCount") or 0) + 1
+    item["lastBuyQty"] = qty
+
+
+def mark_sell_in_state(state, code, sell_qty, remaining_count):
+    meta = state.setdefault("holdMeta", {})
+    item = meta.setdefault(code, {})
+    item["lastSellDate"] = state.get("date")
+    item["lastSellSlot"] = current_slot_index(state)
+    item["lastSellQty"] = sell_qty
+    item["lastKnownCount"] = max(0, remaining_count)
+    if remaining_count <= 0:
+        meta.pop(code, None)
+
+
+def get_position_signals(p):
+    day_pct = float((p.get("dayProfitPct") or 0) or 0)
+    total_pct = float((p.get("profitPct") or 0) or 0)
+    return day_pct, total_pct
+
+
+def lots_available(p):
+    count = int(p.get("availCount") or p.get("count") or 0)
+    return int((count // 100) * 100)
+
+
+def should_sell_stale_position(p, state, code):
+    meta = (state.get("holdMeta") or {}).get(code) or {}
+    last_buy_slot = meta.get("lastBuySlot")
+    if last_buy_slot is None:
+        return False, {"reason": "no_buy_slot"}
+    held_slots = current_slot_index(state) - int(last_buy_slot)
+    day_pct, total_pct = get_position_signals(p)
+    if held_slots < 3:
+        return False, {"reason": "hold_slots_lt_3", "heldSlots": held_slots}
+    if day_pct > 0.8 or total_pct > 1.5:
+        return False, {"reason": "still_strong", "heldSlots": held_slots, "dayPct": day_pct, "totalPct": total_pct}
+    if lots_available(p) < 100:
+        return False, {"reason": "not_enough_lots", "heldSlots": held_slots}
+    return True, {"reason": "stale_underperform", "heldSlots": held_slots, "dayPct": day_pct, "totalPct": total_pct}
+
+
+def should_sell_tail_weak(p, candidates, state, code):
+    if code in set(candidates):
+        return False, {"reason": "still_in_candidates"}
+    lots = lots_available(p)
+    if lots < 100:
+        return False, {"reason": "not_enough_lots"}
+    day_pct, total_pct = get_position_signals(p)
+    pos_pct = float((p.get("posPct") or 0) or 0)
+    meta = (state.get("holdMeta") or {}).get(code) or {}
+    held_slots = current_slot_index(state) - int(meta.get("lastBuySlot", current_slot_index(state)))
+    weak = day_pct <= 0.5 and total_pct <= 1.0
+    old_enough = held_slots >= 1
+    if not (weak and old_enough):
+        return False, {"reason": "not_weak_enough", "heldSlots": held_slots, "dayPct": day_pct, "totalPct": total_pct, "posPct": pos_pct}
+    return True, {"reason": "tail_rebalance_weak", "heldSlots": held_slots, "dayPct": day_pct, "totalPct": total_pct, "posPct": pos_pct}
+
+
+def execute_sell(logf, now, state, p, qty, event, reason_detail):
+    code = p.get("secCode")
+    if qty < 100:
+        return False
+    try:
+        rsp = post("/api/claw/mockTrading/trade", {
+            "type": "sell",
+            "stockCode": code,
+            "quantity": qty,
+            "useMarketPrice": True,
+        })
+        remaining = max(0, int(p.get("count") or 0) - qty)
+        mark_sell_in_state(state, code, qty, remaining)
+        append_log(logf, {
+            "ts": now.isoformat(), "event": event,
+            "stockCode": code, "sellQty": qty,
+            "detail": reason_detail,
+            "resp": rsp,
+        })
+        return True
+    except Exception as e:
+        append_log(logf, {
+            "ts": now.isoformat(), "event": f"{event}_error",
+            "stockCode": code, "sellQty": qty,
+            "detail": reason_detail,
+            "err": str(e)
+        })
+        return False
 
 
 def layer1_news_keywords(logf, now):
@@ -103,7 +241,6 @@ def layer2_financial_ok(code, logf, now):
         return True, {"mode": "fail_open", "reason": "financial_endpoint_unavailable"}
 
     text = json.dumps(rsp, ensure_ascii=False)
-    # Very light guardrails from any parsable fields in payload
     pe = re.search(r'"(?:pe|peTtm|peRatio)"\s*:\s*(-?\d+\.?\d*)', text)
     roe = re.search(r'"(?:roe|roeWeighted)"\s*:\s*(-?\d+\.?\d*)', text)
     growth = re.search(r'"(?:netProfitGrowth|profitYoY|yoy)"\s*:\s*(-?\d+\.?\d*)', text)
@@ -139,11 +276,6 @@ def layer3_sync_watchlist(codes, logf, now):
 
 
 def pick_candidates_with_layers(logf, now):
-    """Layer1+Layer2+Layer3 around stock screening.
-
-    Layer4 execution remains in main() via mockTrading endpoints.
-    """
-    # Layer1: info search -> dynamic keywords
     queries = layer1_news_keywords(logf, now)
 
     raw = []
@@ -158,7 +290,6 @@ def pick_candidates_with_layers(logf, now):
     if not candidates:
         return []
 
-    # Layer2: optional financial filter
     passed = []
     for c in candidates:
         ok, detail = layer2_financial_ok(c, logf, now)
@@ -168,7 +299,6 @@ def pick_candidates_with_layers(logf, now):
         if len(passed) >= 20:
             break
 
-    # Layer3: optional selfselect sync
     layer3_ok = layer3_sync_watchlist(passed, logf, now)
     if not layer3_ok:
         append_log(logf, {"ts": now.isoformat(), "event": "layer3_blocked", "reason": "strict_watchlist_enabled"})
@@ -179,7 +309,6 @@ def pick_candidates_with_layers(logf, now):
 
 
 def cleanup_pending_orders(now, logf):
-    """撤掉长时间未成交挂单，避免占用资金。"""
     try:
         od = post("/api/claw/mockTrading/orders", {"fltOrderDrt": 0, "fltOrderStatus": 0})
     except Exception as e:
@@ -189,7 +318,7 @@ def cleanup_pending_orders(now, logf):
     orders = (od.get("data") or {}).get("orders") or []
     for o in orders:
         st = o.get("status")
-        if st not in (2, 6):  # 已报 / 已报待撤
+        if st not in (2, 6):
             continue
         ts = o.get("time")
         if not isinstance(ts, (int, float)):
@@ -222,12 +351,12 @@ def main():
 
     state = load_state()
     if state.get("date") != day:
-        state = {"date": day, "trades": 0}
+        state = {"date": day, "trades": 0, "holdMeta": state.get("holdMeta", {}), "slotHistory": []}
 
     if hhmm not in set(CFG["runTimes"]):
         return
 
-    # 先清理超时挂单
+    register_slot(state, hhmm)
     cleanup_pending_orders(now, logf)
 
     risk_window = (hhmm == "14:30")
@@ -249,10 +378,14 @@ def main():
     plist = (pos.get("data") or {}).get("posList") or []
     pos_unit = (pos.get("data") or {}).get("currencyUnit", 1000)
     held_value = {}
+    pos_by_code = {}
     for p in plist:
         code = p.get("secCode")
         if code:
             held_value[code] = to_yuan(p.get("value"), pos_unit)
+            pos_by_code[code] = p
+
+    ensure_hold_meta_for_positions(state, plist)
 
     single_cap = total_assets * CFG["maxPositionPerStock"]
     over_single = []
@@ -263,14 +396,14 @@ def main():
         if code and ratio > CFG["maxPositionPerStock"] + 1e-9:
             over_single.append((p, value, ratio))
 
-    # 任意时段只要单票超限就先减仓（调仓）
     sold_any = False
+    sold_codes = set()
     for p, value, ratio in over_single:
         code = p.get("secCode")
-        count = int(p.get("availCount") or p.get("count") or 0)
+        count = lots_available(p)
         if count < 100:
             continue
-        px = (value / count) if count > 0 else 0
+        px = (value / int(p.get("count") or 0)) if int(p.get("count") or 0) > 0 else 0
         if px <= 0:
             continue
         target_count = int((single_cap / px) // 100 * 100)
@@ -278,33 +411,52 @@ def main():
         sell_qty = int((sell_qty // 100) * 100)
         if sell_qty < 100:
             continue
-        try:
-            rsp = post("/api/claw/mockTrading/trade", {
-                "type": "sell",
-                "stockCode": code,
-                "quantity": sell_qty,
-                "useMarketPrice": True,
-            })
-            sold_any = True
-            append_log(logf, {
-                "ts": now.isoformat(), "event": "risk_reduce_single_position",
-                "stockCode": code, "sellQty": sell_qty, "ratio": round(ratio, 4), "resp": rsp
-            })
-        except Exception as e:
-            append_log(logf, {
-                "ts": now.isoformat(), "event": "risk_reduce_single_position_error",
-                "stockCode": code, "err": str(e)
-            })
+        ok = execute_sell(logf, now, state, p, sell_qty, "risk_reduce_single_position", {
+            "ratio": round(ratio, 4),
+            "targetCount": target_count,
+            "reason": "single_position_limit"
+        })
+        sold_any = sold_any or ok
+        if ok:
+            sold_codes.add(code)
 
-    # 14:30 仍保留风控优先语义（是否继续开新仓由开关决定）
+    candidates = pick_candidates_with_layers(logf, now)
+
+    for p in plist:
+        code = p.get("secCode")
+        if not code or code in sold_codes:
+            continue
+        ok, detail = should_sell_stale_position(p, state, code)
+        if not ok:
+            continue
+        sell_qty = lots_available(p)
+        ok2 = execute_sell(logf, now, state, p, sell_qty, "sell_stale_position", detail)
+        sold_any = sold_any or ok2
+        if ok2:
+            sold_codes.add(code)
+
     if risk_window:
+        for p in plist:
+            code = p.get("secCode")
+            if not code or code in sold_codes:
+                continue
+            ok, detail = should_sell_tail_weak(p, candidates, state, code)
+            if not ok:
+                continue
+            sell_qty = lots_available(p)
+            ok2 = execute_sell(logf, now, state, p, sell_qty, "tail_rebalance_sell", detail)
+            sold_any = sold_any or ok2
+            if ok2:
+                sold_codes.add(code)
+
         append_log(logf, {
             "ts": now.isoformat(),
             "event": "risk_priority_window",
             "note": "14:30 risk-first: allow new buy orders" if allow_buy_1430 else "14:30 risk-first: no new buy orders",
             "allowBuyAt1430": allow_buy_1430,
             "overSingleCount": len(over_single),
-            "soldAny": sold_any
+            "soldAny": sold_any,
+            "candidateCount": len(candidates),
         })
         if not allow_buy_1430:
             save_state(state)
@@ -337,18 +489,17 @@ def main():
         save_state(state)
         return
 
-    # Four-layer pipeline candidates
-    candidates = pick_candidates_with_layers(logf, now)
     if not candidates:
         append_log(logf, {"ts": now.isoformat(), "event": "no_candidates"})
         save_state(state)
         return
 
-    # 选择未超单票上限的标的
     selected = None
     single_cap = total_assets * CFG["maxPositionPerStock"]
     for c in candidates:
-        if held_value.get(c, 0) < single_cap * 0.9:  # 留 10% 缓冲
+        if c in sold_codes:
+            continue
+        if held_value.get(c, 0) < single_cap * 0.9:
             selected = c
             break
 
@@ -357,17 +508,16 @@ def main():
         save_state(state)
         return
 
-    # 保守下单：按较高假设股价100元计算数量，防止仓位爆掉
     budget_by_single = max(0, single_cap - held_value.get(selected, 0))
     budget_by_total = max(0, total_assets * CFG["maxTotalPosition"] - total_pos_value)
-    per_stock_budget = min(budget_by_single, budget_by_total, avail, total_assets * 0.08)  # 单次最多8%
+    per_stock_budget = min(budget_by_single, budget_by_total, avail, total_assets * 0.08)
 
     if per_stock_budget < 10000:
         append_log(logf, {"ts": now.isoformat(), "event": "skip_small_budget", "budget": per_stock_budget})
         save_state(state)
         return
 
-    qty = int((per_stock_budget / 100) // 100 * 100)  # assume 100元/股
+    qty = int((per_stock_budget / 100) // 100 * 100)
     qty = max(100, min(qty, 2000))
 
     trade = post("/api/claw/mockTrading/trade", {
@@ -384,6 +534,7 @@ def main():
     })
     if ok:
         state["trades"] += 1
+        mark_buy_in_state(state, selected, qty, hhmm)
     save_state(state)
 
 
