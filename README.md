@@ -64,41 +64,64 @@ EOF
 ## Trading strategy
 
 ### 1) Scheduled tasks (auto execution)
-The installer writes 4 trading-day cron jobs:
+The current strategy runs on 5 trading-day slots:
 - 09:24 pre-open scan and order attempt
-- 10:30 second intraday scan
-- 14:30 late-session execution + risk cleanup
+- 10:30 intraday scan
+- 11:30 intraday scan
+- 13:30 intraday scan
+- 14:30 late-session risk-first execution + optional rebalance buy
 - 15:10 generate daily review
 
-### 2) Trade execution logic
-- Pull candidate symbols from the stock-screen endpoint.
-- Check position limits and available cash before sending orders.
-- Submit buy orders with controlled lot sizing.
+### 2) Candidate selection pipeline
+The strategy uses a four-layer pipeline before placing orders:
+- **Layer 1 – News / theme discovery:** build market-hotspot keywords and search for short-term A-share candidates.
+- **Layer 2 – Financial filter:** apply lightweight checks such as PE / ROE / profit-growth when data is available.
+- **Layer 3 – Watchlist sync:** sync shortlisted symbols to the self-select/watchlist layer.
+- **Layer 4 – Trade execution:** place mock-trading orders only after cash, exposure, and lot-size checks pass.
+
+By default, the financial and watchlist layers are fail-open unless strict mode is enabled.
+
+### 3) Buy logic
+- Pull a candidate list from the four-layer pipeline.
+- Skip new buys when daily trade count, cash, single-symbol cap, or total exposure limits are hit.
+- Prefer symbols still below the single-symbol cap.
+- Submit buy orders with controlled lot sizing and market-price execution.
 - Write each order request and response to logs.
 
-### 3) Risk-control logic
+### 4) Sell / rebalance logic
+The strategy is no longer buy-only. It now includes sell-side decisions:
+- **Immediate risk sell-down:** if a position breaches `maxPositionPerStock`, reduce it immediately.
+- **Stale-position exit:** if a holding has aged across multiple run slots and remains weak, exit it.
+- **14:30 weak-position cleanup:** at the tail-risk window, sell positions that are no longer in the candidate pool and remain weak.
+- **14:30 stronger-candidate rebalance:** compare the strongest new candidate with the weakest existing holding; when the score gap is large enough, sell the weaker holding first and let the downstream buy flow rotate into the stronger symbol.
+
+### 5) Risk-control logic
 - Hard single-symbol cap: `maxPositionPerStock`.
 - Hard total exposure cap: `maxTotalPosition`.
 - Daily trade-count limit: `maxTradesPerDay`.
 - Auto-cancel stale pending orders (>20 minutes unfilled).
-- Automatically skip opening new positions when cash is insufficient or limits are hit.
+- Auto-skip new buys when cash is insufficient or exposure limits are hit.
+- 14:30 is handled as a **risk-first** window; optional buy continuation is controlled by `allowBuyAt1430`.
 
-### 4) Daily review workflow
+### 6) Daily review workflow
 - At 15:10, automatically read balance, positions, and order history.
 - Generate a structured JSON review report.
 - Use reports for audit, strategy optimization, and Telegram push.
 
-### 5) Logs and artifacts
+### 7) Logs and artifacts
 - Strategy logs: `~/.openclaw/workspace/mx_autotrade/logs/YYYY-MM-DD.jsonl`
 - Aggregate cron log: `~/.openclaw/workspace/mx_autotrade/cron.log`
 - Daily review: `~/.openclaw/workspace/mx_autotrade/reviews/review-YYYY-MM-DD.json`
+- Runtime state: `~/.openclaw/workspace/mx_autotrade/state.json`
 
-### 6) Parameter tuning
+### 8) Parameter tuning
 Effective config file:
 - `~/.openclaw/workspace/mx_autotrade/config.json`
 
-Common parameters:
-- `maxTradesPerDay` (default: 6)
-- `maxPositionPerStock` (default: 0.15)
-- `maxTotalPosition` (default: 0.60)
-- `runTimes` (default: `09:24/10:30/14:30`)
+Current defaults in this repo:
+- `maxTradesPerDay`: `6`
+- `maxPositionPerStock`: `0.08`
+- `maxTotalPosition`: `0.60`
+- `runTimes`: `09:24 / 10:30 / 11:30 / 13:30 / 14:30`
+- `allowBuyAt1430`: `true`
+- `autoTuneApply`: `true`
