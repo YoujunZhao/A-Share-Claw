@@ -31,7 +31,7 @@ An OpenClaw-based **A-share paper-trading automation workflow** with:
 Send this directly to OpenClaw:
 
 ```text
-Please one-click install and configure A-Share Claw (A股龙虾) on my machine: first run `git clone https://github.com/YoujunZhao/A-Share-Claw.git`, then run `installer/install.sh`, check whether `~/.openclaw/mx.env` contains `MX_APIKEY` (if missing, remind me to provide it), and finally verify that crontab contains the 4 `mx_autotrade` scheduled jobs and report the results.
+Please one-click install and configure A-Share Claw (A股龙虾) on my machine: first run `git clone https://github.com/YoujunZhao/A-Share-Claw.git`, then run `installer/install.sh`, check whether `~/.openclaw/mx.env` contains `MX_APIKEY` (if missing, remind me to provide it), and finally verify that crontab contains the 6 `mx_autotrade` scheduled jobs (5 trading slots + 1 daily review) and report the results.
 ```
 
 ## Manual setup
