@@ -20,9 +20,9 @@
 </div>
 
 An OpenClaw-based **A-share paper-trading automation workflow** with:
-- scheduled runs on trading days (09:24 / 10:30 / 14:30)
-- risk controls (single-symbol cap, total exposure cap, stale-order cancellation)
-- daily review generation at 15:10
+- scheduled runs on trading days (`09:24 / 10:30 / 11:30 / 13:30 / 14:30`)
+- buy-side scanning plus sell-side rebalance / risk reduction
+- daily review generation at `15:10`
 
 > For paper trading education only. Not financial advice.
 
@@ -125,4 +125,4 @@ Current defaults in this repo:
 - `maxTotalPosition`: `0.60`
 - `runTimes`: `09:24 / 10:30 / 11:30 / 13:30 / 14:30`
 - `allowBuyAt1430`: `true`
-- `autoTuneApply`: `true`
+- `autoTuneApply`: `true`true`
