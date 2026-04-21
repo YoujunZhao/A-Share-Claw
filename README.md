@@ -15,6 +15,7 @@
 | Day13 | -0.08% | +0.32% | Day14 | -0.40% | -0.31% |
 | Day15 | -0.46% | -0.07% | Day16 | -0.41% | +0.05% |
 | Day17 | -0.09% | +0.33% | Day18 | +0.03% | +0.11% |
+| Day19 | 201,190.10 | +0.57% |
 
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
 [![中文](https://img.shields.io/badge/语言-中文-red)](./README-CN.md)
