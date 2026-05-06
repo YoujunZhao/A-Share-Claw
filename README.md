@@ -21,6 +21,7 @@
 | Day24 | 199,318.87 | -0.44% |
 | Day25 | 199,614.13 | +0.15% |
 | Day26 | 199,738.13 | +0.06% |
+| Day27 | 201,253.99 | +0.76% |
 
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
 [![中文](https://img.shields.io/badge/语言-中文-red)](./README-CN.md)
